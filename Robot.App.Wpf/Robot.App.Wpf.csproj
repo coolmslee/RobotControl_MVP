@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\Robot.Abstractions\Robot.Abstractions.csproj" />
+    <ProjectReference Include="..\Robot.Core\Robot.Core.csproj" />
+  </ItemGroup>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <Target Name="CopySimDriverOutputs" AfterTargets="Build">
+    <ItemGroup>
+      <SimDriverOutputs Include="$(SolutionDir)Robot.Drivers.Sim\bin\$(Configuration)\**\*.*" />
+    </ItemGroup>
+    <MakeDir Directories="$(OutputPath)Drivers" />
+    <Copy SourceFiles="@(SimDriverOutputs)"
+          DestinationFiles="@(SimDriverOutputs->'$(OutputPath)Drivers\%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+</Project>
