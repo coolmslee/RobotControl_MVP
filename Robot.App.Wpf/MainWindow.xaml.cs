@@ -276,7 +276,7 @@ public partial class MainWindow : Window
         _sceneGroup.Children.Add(CreateLightingGroup());
         _sceneGroup.Children.Add(CreateFloorModel());
 
-        var unitCapsule = BuildUnitLinkMesh();
+        var unitCapsule = CreateUnitLinkMesh();
         foreach (var linkName in new[] { "Link1", "Link2", "Link3", "Link4", "Link5", "Link6" })
         {
             var model = new GeometryModel3D(unitCapsule, CreateLinkMaterial(isCollision: false));
@@ -312,7 +312,7 @@ public partial class MainWindow : Window
         return model;
     }
 
-    private static System.Windows.Media.Media3D.MeshGeometry3D BuildUnitLinkMesh()
+    private static System.Windows.Media.Media3D.MeshGeometry3D CreateUnitLinkMesh()
     {
         return CreateCylinderMesh(1, 1, 24);
     }
@@ -455,7 +455,8 @@ public partial class MainWindow : Window
         var seed = 1234;
         if (useFixedSeed && !int.TryParse(SeedTextBox.Text, out seed))
         {
-            SetAlarmText("Alarm: Invalid fixed seed.", true);
+            SetAlarmText("Alarm: Fixed seed must be a valid integer.", true);
+            WorkpieceTextBlock.Text = "Workpiece: fixed seed input invalid";
             return;
         }
 
@@ -585,7 +586,7 @@ public partial class MainWindow : Window
 
         var screenshotsDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Screenshots");
         System.IO.Directory.CreateDirectory(screenshotsDir);
-        var filePath = System.IO.Path.Combine(screenshotsDir, $"{preset}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+        var filePath = System.IO.Path.Combine(screenshotsDir, $"{preset}-{DateTime.UtcNow:yyyyMMdd-HHmmss-ffffff}.png");
 
         using var stream = System.IO.File.Create(filePath);
         var encoder = new PngBitmapEncoder();

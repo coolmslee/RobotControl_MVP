@@ -6,6 +6,7 @@ public sealed class Ur5LikeRobotModel
 {
     private static readonly LinkDefinition[] LinkDefinitions =
     [
+        // Visual collision/rendering radii (UR5-like approximation, not CAD-exact values).
         new("Link1", 65),
         new("Link2", 58),
         new("Link3", 50),
@@ -75,18 +76,10 @@ public sealed class Ur5LikeRobotModel
 
     private static Matrix4x4 CreateDhTransform(DhParameter p, double theta)
     {
-        var ct = (float)Math.Cos(theta);
-        var st = (float)Math.Sin(theta);
-        var ca = (float)Math.Cos(p.AlphaRad);
-        var sa = (float)Math.Sin(p.AlphaRad);
-        var a = (float)p.A;
-        var d = (float)p.D;
-
-        return new Matrix4x4(
-            ct, st, 0, 0,
-            -st * ca, ct * ca, sa, 0,
-            st * sa, -ct * sa, ca, 0,
-            a * ct, a * st, d, 1);
+        return Matrix4x4.CreateRotationZ((float)theta)
+               * Matrix4x4.CreateTranslation(0, 0, (float)p.D)
+               * Matrix4x4.CreateTranslation((float)p.A, 0, 0)
+               * Matrix4x4.CreateRotationX((float)p.AlphaRad);
     }
 
     private static Vector3 ExtractTranslation(Matrix4x4 matrix)
@@ -123,11 +116,9 @@ public sealed class Ur5LikeRobotModel
 
 public sealed class ScenePlacementService
 {
-    private readonly Random _runRandom = new();
-
     public SceneBox CreateRandomWorkpiece(bool useFixedSeed, int seed)
     {
-        var random = useFixedSeed ? new Random(seed) : _runRandom;
+        var random = useFixedSeed ? new Random(seed) : Random.Shared;
         var x = Lerp(300, 900, random.NextDouble());
         var y = Lerp(-400, 400, random.NextDouble());
         return new SceneBox(
