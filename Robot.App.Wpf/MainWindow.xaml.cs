@@ -10,6 +10,10 @@ namespace Robot.App.Wpf;
 
 public partial class MainWindow : Window
 {
+    private const int TrailDurationSeconds = 10;
+    private const int MaxTrailPoints = 2000;
+    private const double MinimumAxisRangeForMapping = 1e-6;
+
     private readonly DriverPluginLoader _pluginLoader = new();
     private readonly List<TrailPoint> _trail = new();
 
@@ -134,11 +138,11 @@ public partial class MainWindow : Window
                 $"Pose: X={pose.X:F2}, Y={pose.Y:F2}, Z={pose.Z:F2}, Rx={pose.Rx:F1}, Ry={pose.Ry:F1}, Rz={pose.Rz:F1}";
 
             _trail.Add(new TrailPoint(DateTime.UtcNow, pose));
-            var cutoff = DateTime.UtcNow.AddSeconds(-10);
+            var cutoff = DateTime.UtcNow.AddSeconds(-TrailDurationSeconds);
             _trail.RemoveAll(x => x.Timestamp < cutoff);
-            if (_trail.Count > 2000)
+            if (_trail.Count > MaxTrailPoints)
             {
-                _trail.RemoveRange(0, _trail.Count - 2000);
+                _trail.RemoveRange(0, _trail.Count - MaxTrailPoints);
             }
 
             RenderAllViews();
@@ -202,8 +206,8 @@ public partial class MainWindow : Window
         Point Map(Pose6 pose)
         {
             var (a, b) = projection(pose);
-            var x = (a - minA) / Math.Max(1e-6, maxA - minA) * width;
-            var y = height - ((b - minB) / Math.Max(1e-6, maxB - minB) * height);
+            var x = (a - minA) / Math.Max(MinimumAxisRangeForMapping, maxA - minA) * width;
+            var y = height - ((b - minB) / Math.Max(MinimumAxisRangeForMapping, maxB - minB) * height);
             return new Point(x, y);
         }
 

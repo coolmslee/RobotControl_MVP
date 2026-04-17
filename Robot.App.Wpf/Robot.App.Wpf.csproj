@@ -16,7 +16,7 @@
 
   <Target Name="CopySimDriverOutputs" AfterTargets="Build">
     <ItemGroup>
-      <SimDriverOutputs Include="$(SolutionDir)Robot.Drivers.Sim\bin\$(Configuration)\**\*.*" />
+      <SimDriverOutputs Include="$(SolutionDir)Robot.Drivers.Sim\bin\$(Configuration)\net8.0\*.*" />
     </ItemGroup>
     <MakeDir Directories="$(OutputPath)Drivers" />
     <Copy SourceFiles="@(SimDriverOutputs)"

@@ -6,6 +6,8 @@ namespace Robot.Core;
 
 public sealed class MotionEngine : IDisposable
 {
+    private const double MinimumDeltaSeconds = 0.0001;
+
     private readonly object _sync = new();
     private readonly ConcurrentQueue<MotionRequest> _queue = new();
 
@@ -32,6 +34,16 @@ public sealed class MotionEngine : IDisposable
 
     public void Configure(MachineConfig config)
     {
+        if (config.TickMs <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(config.TickMs), "TickMs must be greater than 0.");
+        }
+
+        if (config.UiUpdateHz <= 0)
+        {
+            throw new ArgumentOutOfRangeException(nameof(config.UiUpdateHz), "UiUpdateHz must be greater than 0.");
+        }
+
         _config = config;
     }
 
@@ -104,7 +116,7 @@ public sealed class MotionEngine : IDisposable
 
     private void RunLoop()
     {
-        var tickMs = Math.Max(1, _config.TickMs);
+        var tickMs = _config.TickMs;
         var tickSpan = TimeSpan.FromMilliseconds(tickMs);
         var lastTick = DateTime.UtcNow;
 
@@ -114,7 +126,7 @@ public sealed class MotionEngine : IDisposable
             var delta = start - lastTick;
             lastTick = start;
 
-            Tick(Math.Max(0.0001, delta.TotalSeconds));
+            Tick(Math.Max(MinimumDeltaSeconds, delta.TotalSeconds));
 
             var elapsed = DateTime.UtcNow - start;
             var remaining = tickSpan - elapsed;
@@ -247,11 +259,16 @@ public sealed class MotionEngine : IDisposable
 
     private sealed class MotionSegment
     {
+        private const double TwoPi = 2 * Math.PI;
+        private const double MinimumSegmentLengthMm = 0.000001;
+        private const float CollinearityThresholdSquared = 1e-8f;
+        private const float MinimumArcRadiusMm = 1e-6f;
+
         private readonly Func<double, Pose6> _evaluate;
 
         private MotionSegment(double lengthMm, double feedMmPerSec, Pose6 target, Func<double, Pose6> evaluate)
         {
-            LengthMm = Math.Max(0.000001, lengthMm);
+            LengthMm = Math.Max(MinimumSegmentLengthMm, lengthMm);
             FeedMmPerSec = feedMmPerSec;
             Target = target;
             _evaluate = evaluate;
@@ -316,7 +333,7 @@ public sealed class MotionEngine : IDisposable
             var v = target - start;
             var w = Vector3.Cross(u, v);
             var wLenSq = w.LengthSquared();
-            if (wLenSq < 1e-8f)
+            if (wLenSq < CollinearityThresholdSquared)
             {
                 return false;
             }
@@ -327,7 +344,7 @@ public sealed class MotionEngine : IDisposable
                          / (2f * wLenSq);
 
             var radius = Vector3.Distance(center, start);
-            if (radius < 1e-6f)
+            if (radius < MinimumArcRadiusMm)
             {
                 return false;
             }
@@ -344,7 +361,7 @@ public sealed class MotionEngine : IDisposable
             var ccwToTarget = NormalizeToTwoPi(targetAngle - startAngle);
             var sweep = ccwToVia <= ccwToTarget
                 ? ccwToTarget
-                : ccwToTarget - (2 * Math.PI);
+                : ccwToTarget - TwoPi;
 
             arc = new ArcData(center, e1, e2, radius, startAngle, sweep);
             return true;
@@ -355,8 +372,8 @@ public sealed class MotionEngine : IDisposable
 
         private static double NormalizeToTwoPi(double angle)
         {
-            var normalized = angle % (2 * Math.PI);
-            return normalized < 0 ? normalized + (2 * Math.PI) : normalized;
+            var normalized = angle % TwoPi;
+            return normalized < 0 ? normalized + TwoPi : normalized;
         }
 
         private static double Lerp(double start, double end, double t) => start + ((end - start) * t);
