@@ -1,10 +1,15 @@
 using System.Globalization;
+using System.Numerics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
+using HelixToolkit.Wpf;
 using Robot.Abstractions;
 using Robot.Core;
+using Robot.Core.Simulation3D;
 
 namespace Robot.App.Wpf;
 
@@ -16,16 +21,32 @@ public partial class MainWindow : Window
 
     private readonly DriverPluginLoader _pluginLoader = new();
     private readonly List<TrailPoint> _trail = new();
+    private readonly Ur5LikeRobotModel _robotModel = new();
+    private readonly ScenePlacementService _scenePlacementService = new();
+    private readonly List<LinkVisualBinding> _linkVisuals = new();
 
     private MotionEngine? _engine;
     private IRobotDevice? _device;
     private MachineConfig? _config;
     private Pose6 _latestPose;
+    private Model3DGroup? _sceneGroup;
+    private GeometryModel3D? _workpieceModel;
+    private GeometryModel3D? _fenceModel;
+    private SceneBox _workpiece;
+    private SceneBox _fence;
+    private bool _is3DInitialized;
 
     public MainWindow()
     {
         InitializeComponent();
-        Loaded += (_, _) => RenderAllViews();
+        Loaded += (_, _) =>
+        {
+            RenderAllViews();
+            Initialize3DScene();
+            RandomizeScenePlacement();
+            ApplyCameraPreset(CameraPreset.Work);
+            UpdateRobot3D();
+        };
     }
 
     private void ConnectButton_OnClick(object sender, RoutedEventArgs e)
@@ -244,11 +265,348 @@ public partial class MainWindow : Window
         AlarmTextBlock.Foreground = isAlarm ? Brushes.Red : Brushes.Green;
     }
 
+    private void Initialize3DScene()
+    {
+        if (_is3DInitialized)
+        {
+            return;
+        }
+
+        _sceneGroup = new Model3DGroup();
+        _sceneGroup.Children.Add(CreateLightingGroup());
+        _sceneGroup.Children.Add(CreateFloorModel());
+
+        var unitCapsule = BuildUnitLinkMesh();
+        foreach (var linkName in new[] { "Link1", "Link2", "Link3", "Link4", "Link5", "Link6" })
+        {
+            var model = new GeometryModel3D(unitCapsule, CreateLinkMaterial(isCollision: false));
+            _sceneGroup.Children.Add(model);
+            _linkVisuals.Add(new LinkVisualBinding(linkName, model));
+        }
+
+        _workpieceModel = CreateBoxModel(new Vector3(500, 300, 300), Color.FromRgb(77, 118, 189));
+        _fenceModel = CreateBoxModel(new Vector3(2500, 50, 1800), Color.FromRgb(120, 120, 120));
+        _sceneGroup.Children.Add(_workpieceModel);
+        _sceneGroup.Children.Add(_fenceModel);
+
+        SimViewport.Children.Add(new ModelVisual3D { Content = _sceneGroup });
+        SimViewport.Camera = CreateCamera(new Point3D(1600, -1600, 1300));
+        _is3DInitialized = true;
+    }
+
+    private static Model3DGroup CreateLightingGroup()
+    {
+        var lights = new Model3DGroup();
+        lights.Children.Add(new AmbientLight(Color.FromRgb(70, 70, 70)));
+        lights.Children.Add(new DirectionalLight(Color.FromRgb(230, 230, 230), new Vector3D(-0.4, -0.7, -1)));
+        lights.Children.Add(new DirectionalLight(Color.FromRgb(180, 180, 180), new Vector3D(0.3, 0.5, -0.7)));
+        return lights;
+    }
+
+    private static GeometryModel3D CreateFloorModel()
+    {
+        var model = new GeometryModel3D(
+            CreateBoxMesh(3000, 3000, 20),
+            CreateMaterial(Color.FromRgb(40, 40, 44), Color.FromRgb(80, 80, 84), 20));
+        model.Transform = new TranslateTransform3D(0, 0, -10);
+        return model;
+    }
+
+    private static System.Windows.Media.Media3D.MeshGeometry3D BuildUnitLinkMesh()
+    {
+        return CreateCylinderMesh(1, 1, 24);
+    }
+
+    private static GeometryModel3D CreateBoxModel(Vector3 size, Color color)
+    {
+        return new GeometryModel3D(CreateBoxMesh(size.X, size.Y, size.Z), CreateMaterial(color, Colors.White, 70));
+    }
+
+    private static MeshGeometry3D CreateBoxMesh(double width, double depth, double height)
+    {
+        var hx = width * 0.5;
+        var hy = depth * 0.5;
+        var hz = height * 0.5;
+        var positions = new Point3DCollection
+        {
+            new(-hx, -hy, -hz), new(hx, -hy, -hz), new(hx, hy, -hz), new(-hx, hy, -hz),
+            new(-hx, -hy, hz), new(hx, -hy, hz), new(hx, hy, hz), new(-hx, hy, hz),
+        };
+        var indices = new Int32Collection
+        {
+            0, 1, 2, 0, 2, 3, // bottom
+            4, 6, 5, 4, 7, 6, // top
+            0, 4, 5, 0, 5, 1, // front
+            1, 5, 6, 1, 6, 2, // right
+            2, 6, 7, 2, 7, 3, // back
+            3, 7, 4, 3, 4, 0, // left
+        };
+        return new MeshGeometry3D { Positions = positions, TriangleIndices = indices };
+    }
+
+    private static MeshGeometry3D CreateCylinderMesh(double radius, double height, int segments)
+    {
+        var positions = new Point3DCollection();
+        var indices = new Int32Collection();
+        var normals = new Vector3DCollection();
+        var halfHeight = height * 0.5;
+
+        for (var i = 0; i <= segments; i++)
+        {
+            var angle = (2 * Math.PI * i) / segments;
+            var x = radius * Math.Cos(angle);
+            var y = radius * Math.Sin(angle);
+            positions.Add(new Point3D(x, y, -halfHeight));
+            positions.Add(new Point3D(x, y, halfHeight));
+            var normal = new Vector3D(x, y, 0);
+            normal.Normalize();
+            normals.Add(normal);
+            normals.Add(normal);
+        }
+
+        for (var i = 0; i < segments; i++)
+        {
+            var b0 = i * 2;
+            var t0 = b0 + 1;
+            var b1 = ((i + 1) * 2);
+            var t1 = b1 + 1;
+            indices.Add(b0);
+            indices.Add(t0);
+            indices.Add(t1);
+            indices.Add(b0);
+            indices.Add(t1);
+            indices.Add(b1);
+        }
+
+        var bottomCenter = positions.Count;
+        positions.Add(new Point3D(0, 0, -halfHeight));
+        normals.Add(new Vector3D(0, 0, -1));
+        var topCenter = positions.Count;
+        positions.Add(new Point3D(0, 0, halfHeight));
+        normals.Add(new Vector3D(0, 0, 1));
+
+        for (var i = 0; i < segments; i++)
+        {
+            var b0 = i * 2;
+            var b1 = ((i + 1) * 2);
+            indices.Add(bottomCenter);
+            indices.Add(b1);
+            indices.Add(b0);
+
+            var t0 = b0 + 1;
+            var t1 = b1 + 1;
+            indices.Add(topCenter);
+            indices.Add(t0);
+            indices.Add(t1);
+        }
+
+        return new MeshGeometry3D
+        {
+            Positions = positions,
+            TriangleIndices = indices,
+            Normals = normals,
+        };
+    }
+
+    private static MaterialGroup CreateLinkMaterial(bool isCollision)
+    {
+        return isCollision
+            ? CreateMaterial(Color.FromRgb(220, 40, 40), Colors.White, 100)
+            : CreateMaterial(Color.FromRgb(180, 184, 190), Color.FromRgb(255, 255, 255), 100);
+    }
+
+    private static MaterialGroup CreateMaterial(Color diffuse, Color specular, double specularPower)
+    {
+        return new MaterialGroup
+        {
+            Children =
+            {
+                new DiffuseMaterial(new SolidColorBrush(diffuse)),
+                new SpecularMaterial(new SolidColorBrush(specular), specularPower),
+            },
+        };
+    }
+
+    private void JointSlider_OnValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        if (!_is3DInitialized)
+        {
+            return;
+        }
+
+        Joint1ValueTextBlock.Text = $"{Joint1Slider.Value:F1}°";
+        Joint2ValueTextBlock.Text = $"{Joint2Slider.Value:F1}°";
+        Joint3ValueTextBlock.Text = $"{Joint3Slider.Value:F1}°";
+        Joint4ValueTextBlock.Text = $"{Joint4Slider.Value:F1}°";
+        Joint5ValueTextBlock.Text = $"{Joint5Slider.Value:F1}°";
+        Joint6ValueTextBlock.Text = $"{Joint6Slider.Value:F1}°";
+        UpdateRobot3D();
+    }
+
+    private void RandomizeWorkpieceButton_OnClick(object sender, RoutedEventArgs e)
+    {
+        RandomizeScenePlacement();
+        UpdateRobot3D();
+    }
+
+    private void RandomizeScenePlacement()
+    {
+        var useFixedSeed = FixedSeedCheckBox.IsChecked == true;
+        var seed = 1234;
+        if (useFixedSeed && !int.TryParse(SeedTextBox.Text, out seed))
+        {
+            SetAlarmText("Alarm: Invalid fixed seed.", true);
+            return;
+        }
+
+        _workpiece = _scenePlacementService.CreateRandomWorkpiece(useFixedSeed, seed);
+        _fence = _scenePlacementService.CreateFenceOppositeWorkpiece(_workpiece);
+
+        if (_workpieceModel is not null)
+        {
+            _workpieceModel.Transform = CreateBoxTransform(_workpiece.Center, _workpiece.YawDeg);
+        }
+
+        if (_fenceModel is not null)
+        {
+            _fenceModel.Transform = CreateBoxTransform(_fence.Center, _fence.YawDeg);
+        }
+
+        WorkpieceTextBlock.Text = $"Workpiece: X={_workpiece.Center.X:F0}, Y={_workpiece.Center.Y:F0}, Z={_workpiece.Center.Z:F0}";
+    }
+
+    private static Transform3D CreateBoxTransform(Vector3 center, double yawDeg)
+    {
+        var rotate = new RotateTransform3D(new AxisAngleRotation3D(new Vector3D(0, 0, 1), yawDeg));
+        var translate = new TranslateTransform3D(center.X, center.Y, center.Z);
+        return new Transform3DGroup
+        {
+            Children =
+            {
+                rotate,
+                translate,
+            },
+        };
+    }
+
+    private void UpdateRobot3D()
+    {
+        if (!_is3DInitialized)
+        {
+            return;
+        }
+
+        var joints = new[]
+        {
+            Joint1Slider.Value,
+            Joint2Slider.Value,
+            Joint3Slider.Value,
+            Joint4Slider.Value,
+            Joint5Slider.Value,
+            Joint6Slider.Value,
+        };
+
+        var robotState = _robotModel.Compute(joints);
+        var collidingLinks = CollisionDetector.DetectCollidingLinks(robotState.Links, [_workpiece, _fence]);
+        var collidingSet = new HashSet<string>(collidingLinks, StringComparer.Ordinal);
+        foreach (var (name, model) in _linkVisuals)
+        {
+            var link = robotState.Links.First(x => x.Name.Equals(name, StringComparison.Ordinal));
+            model.Transform = CreateLinkTransform(link);
+            model.Material = CreateLinkMaterial(collidingSet.Contains(name));
+        }
+
+        if (collidingLinks.Count > 0)
+        {
+            CollisionTextBlock.Text = $"Collision: {string.Join(", ", collidingLinks)}";
+            CollisionTextBlock.Foreground = Brushes.Red;
+        }
+        else
+        {
+            CollisionTextBlock.Text = "Collision: None";
+            CollisionTextBlock.Foreground = Brushes.LimeGreen;
+        }
+    }
+
+    private static Transform3D CreateLinkTransform(RobotLinkTransform link)
+    {
+        var rotation = new System.Windows.Media.Media3D.Quaternion(link.Rotation.X, link.Rotation.Y, link.Rotation.Z, link.Rotation.W);
+        return new Transform3DGroup
+        {
+            Children =
+            {
+                new ScaleTransform3D(link.RadiusMm, link.RadiusMm, link.LengthMm),
+                new RotateTransform3D(new QuaternionRotation3D(rotation)),
+                new TranslateTransform3D(link.Center.X, link.Center.Y, link.Center.Z),
+            },
+        };
+    }
+
+    private void FrontCameraButton_OnClick(object sender, RoutedEventArgs e) => ApplyCameraPreset(CameraPreset.Front);
+
+    private void SideCameraButton_OnClick(object sender, RoutedEventArgs e) => ApplyCameraPreset(CameraPreset.Side);
+
+    private void WorkCameraButton_OnClick(object sender, RoutedEventArgs e) => ApplyCameraPreset(CameraPreset.Work);
+
+    private void CaptureFrontButton_OnClick(object sender, RoutedEventArgs e) => CapturePresetScreenshot(CameraPreset.Front);
+
+    private void CaptureSideButton_OnClick(object sender, RoutedEventArgs e) => CapturePresetScreenshot(CameraPreset.Side);
+
+    private void CaptureWorkButton_OnClick(object sender, RoutedEventArgs e) => CapturePresetScreenshot(CameraPreset.Work);
+
+    private void ApplyCameraPreset(CameraPreset preset)
+    {
+        var position = preset switch
+        {
+            CameraPreset.Front => new Point3D(2300, 0, 1100),
+            CameraPreset.Side => new Point3D(0, 2300, 1100),
+            _ => new Point3D(1650, -1650, 1400),
+        };
+
+        SimViewport.Camera = CreateCamera(position);
+    }
+
+    private static PerspectiveCamera CreateCamera(Point3D position)
+    {
+        var lookAt = new Point3D(0, 0, 600);
+        var direction = lookAt - position;
+        return new PerspectiveCamera(position, direction, new Vector3D(0, 0, 1), 45);
+    }
+
+    private void CapturePresetScreenshot(CameraPreset preset)
+    {
+        ApplyCameraPreset(preset);
+        SimViewport.UpdateLayout();
+
+        var width = Math.Max(1, (int)SimViewport.ActualWidth);
+        var height = Math.Max(1, (int)SimViewport.ActualHeight);
+        var target = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        target.Render(SimViewport);
+
+        var screenshotsDir = System.IO.Path.Combine(AppContext.BaseDirectory, "Screenshots");
+        System.IO.Directory.CreateDirectory(screenshotsDir);
+        var filePath = System.IO.Path.Combine(screenshotsDir, $"{preset}-{DateTime.Now:yyyyMMdd-HHmmss}.png");
+
+        using var stream = System.IO.File.Create(filePath);
+        var encoder = new PngBitmapEncoder();
+        encoder.Frames.Add(BitmapFrame.Create(target));
+        encoder.Save(stream);
+        WorkpieceTextBlock.Text = $"Workpiece: X={_workpiece.Center.X:F0}, Y={_workpiece.Center.Y:F0}, Z={_workpiece.Center.Z:F0} | Saved: {System.IO.Path.GetFileName(filePath)}";
+    }
+
     protected override void OnClosed(EventArgs e)
     {
         _engine?.Dispose();
         base.OnClosed(e);
     }
 
+    private enum CameraPreset
+    {
+        Front,
+        Side,
+        Work,
+    }
+
+    private readonly record struct LinkVisualBinding(string Name, GeometryModel3D Model);
     private readonly record struct TrailPoint(DateTime Timestamp, Pose6 Pose);
 }
