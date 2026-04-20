@@ -1,6 +1,7 @@
 <Window x:Class="Robot.App.Wpf.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:helix="http://helix-toolkit.org/wpf"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
@@ -76,6 +77,90 @@
             </TabItem>
             <TabItem Header="Side (YZ)">
                 <Canvas x:Name="SideCanvas" Background="#FF1E1E1E" />
+            </TabItem>
+            <TabItem Header="3D">
+                <Grid Margin="8">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="Auto"/>
+                        <RowDefinition Height="*"/>
+                    </Grid.RowDefinitions>
+
+                    <WrapPanel Grid.Row="0" Margin="0,0,0,8">
+                        <Button Content="Front Camera" Width="110" Margin="0,0,8,6" Click="FrontCameraButton_OnClick"/>
+                        <Button Content="Side Camera" Width="110" Margin="0,0,8,6" Click="SideCameraButton_OnClick"/>
+                        <Button Content="Work Camera" Width="110" Margin="0,0,8,6" Click="WorkCameraButton_OnClick"/>
+                        <Button Content="Capture Front PNG" Width="130" Margin="0,0,8,6" Click="CaptureFrontButton_OnClick"/>
+                        <Button Content="Capture Side PNG" Width="130" Margin="0,0,8,6" Click="CaptureSideButton_OnClick"/>
+                        <Button Content="Capture Work PNG" Width="130" Margin="0,0,8,6" Click="CaptureWorkButton_OnClick"/>
+                    </WrapPanel>
+
+                    <Grid Grid.Row="1" Margin="0,0,0,8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="3*"/>
+                            <ColumnDefinition Width="2*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="0,0,8,0">
+                            <CheckBox x:Name="FixedSeedCheckBox" Content="Fixed Seed" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                            <TextBlock VerticalAlignment="Center" Text="Seed"/>
+                            <TextBox x:Name="SeedTextBox" Width="80" Margin="4,0,8,0" Text="1234"/>
+                            <Button Content="Randomize Workpiece" Width="160" Click="RandomizeWorkpieceButton_OnClick"/>
+                            <TextBlock x:Name="WorkpieceTextBlock" VerticalAlignment="Center" Margin="12,0,0,0" Text="Workpiece: (not set)"/>
+                        </StackPanel>
+
+                        <TextBlock x:Name="CollisionTextBlock"
+                                   Grid.Column="1"
+                                   VerticalAlignment="Center"
+                                   FontWeight="Bold"
+                                   Foreground="Green"
+                                   Text="Collision: None"/>
+                    </Grid>
+
+                    <Grid Grid.Row="2">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="240"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+
+                        <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                            <TextBlock Text="Joint Sliders (deg)" FontWeight="Bold" Margin="0,0,0,8"/>
+
+                            <TextBlock Text="q1"/>
+                            <Slider x:Name="Joint1Slider" Minimum="-180" Maximum="180" Value="0" ValueChanged="JointSlider_OnValueChanged"/>
+                            <TextBlock x:Name="Joint1ValueTextBlock" Margin="0,0,0,6" Text="0.0°"/>
+
+                            <TextBlock Text="q2"/>
+                            <Slider x:Name="Joint2Slider" Minimum="-180" Maximum="180" Value="-90" ValueChanged="JointSlider_OnValueChanged"/>
+                            <TextBlock x:Name="Joint2ValueTextBlock" Margin="0,0,0,6" Text="-90.0°"/>
+
+                            <TextBlock Text="q3"/>
+                            <Slider x:Name="Joint3Slider" Minimum="-180" Maximum="180" Value="90" ValueChanged="JointSlider_OnValueChanged"/>
+                            <TextBlock x:Name="Joint3ValueTextBlock" Margin="0,0,0,6" Text="90.0°"/>
+
+                            <TextBlock Text="q4"/>
+                            <Slider x:Name="Joint4Slider" Minimum="-180" Maximum="180" Value="0" ValueChanged="JointSlider_OnValueChanged"/>
+                            <TextBlock x:Name="Joint4ValueTextBlock" Margin="0,0,0,6" Text="0.0°"/>
+
+                            <TextBlock Text="q5"/>
+                            <Slider x:Name="Joint5Slider" Minimum="-180" Maximum="180" Value="0" ValueChanged="JointSlider_OnValueChanged"/>
+                            <TextBlock x:Name="Joint5ValueTextBlock" Margin="0,0,0,6" Text="0.0°"/>
+
+                            <TextBlock Text="q6"/>
+                            <Slider x:Name="Joint6Slider" Minimum="-180" Maximum="180" Value="0" ValueChanged="JointSlider_OnValueChanged"/>
+                            <TextBlock x:Name="Joint6ValueTextBlock" Text="0.0°"/>
+                        </StackPanel>
+
+                        <Border Grid.Column="1" BorderBrush="#FF2C2C2C" BorderThickness="1">
+                            <helix:HelixViewport3D x:Name="SimViewport"
+                                                   Background="#FF171717"
+                                                   ShowCoordinateSystem="True"
+                                                   ZoomExtentsWhenLoaded="True">
+                                <helix:GridLinesVisual3D Width="3000" Length="3000" MinorDistance="100" MajorDistance="500" Thickness="0.5"/>
+                            </helix:HelixViewport3D>
+                        </Border>
+                    </Grid>
+                </Grid>
             </TabItem>
         </TabControl>
     </Grid>
