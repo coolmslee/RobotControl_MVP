@@ -6,6 +6,12 @@
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d"
         Title="RobotControl MVP" Height="820" Width="1200">
+    <Window.Resources>
+        <LinearGradientBrush x:Key="SimulationViewportBackgroundBrush" StartPoint="0,0" EndPoint="0,1">
+            <GradientStop Color="#FF0A2A52" Offset="0"/>
+            <GradientStop Color="#FF051325" Offset="1"/>
+        </LinearGradientBrush>
+    </Window.Resources>
     <Grid Margin="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -151,13 +157,14 @@
                             <TextBlock x:Name="Joint6ValueTextBlock" Text="0.0°"/>
                         </StackPanel>
 
-                        <Border Grid.Column="1" BorderBrush="#FF2C2C2C" BorderThickness="1">
+                        <Border Grid.Column="1"
+                                BorderBrush="#FF2C2C2C"
+                                BorderThickness="1"
+                                Background="{StaticResource SimulationViewportBackgroundBrush}">
                             <helix:HelixViewport3D x:Name="SimViewport"
-                                                   Background="#FF171717"
-                                                   ShowCoordinateSystem="True"
-                                                   ZoomExtentsWhenLoaded="True">
-                                <helix:GridLinesVisual3D Width="3000" Length="3000" MinorDistance="100" MajorDistance="500" Thickness="0.5"/>
-                            </helix:HelixViewport3D>
+                                                   Background="{StaticResource SimulationViewportBackgroundBrush}"
+                                                   ShowCoordinateSystem="False"
+                                                   ZoomExtentsWhenLoaded="True"/>
                         </Border>
                     </Grid>
                 </Grid>
