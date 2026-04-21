@@ -9,7 +9,9 @@ internal static class Simulation3DVisualStyle
     public static readonly Color LinkSpecularColor = Color.FromRgb(255, 255, 255);
     public static readonly Color LinkCollisionColor = Color.FromRgb(220, 40, 40);
     public static readonly Color JointHousingColor = Color.FromRgb(98, 102, 108);
+    public static readonly Color JointHousingSpecularColor = Color.FromRgb(230, 232, 238);
     public static readonly Color JointCapColor = Color.FromRgb(0, 218, 255);
+    public static readonly Color JointCapSpecularColor = Color.FromRgb(210, 255, 255);
     public static readonly Color OriginToTcpLineColor = Color.FromRgb(245, 245, 245);
 
     public static readonly Color FloorDiffuseColor = Color.FromRgb(28, 34, 44);

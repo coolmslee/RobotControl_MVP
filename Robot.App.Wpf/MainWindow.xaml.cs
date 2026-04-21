@@ -297,9 +297,10 @@ public partial class MainWindow : Window
         _sceneGroup.Children.Add(_workpieceModel);
         _sceneGroup.Children.Add(_fenceModel);
 
-        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3((float)Simulation3DVisualStyle.TriadAxisLengthMm, 0, 0), Simulation3DVisualStyle.AxisXColor));
-        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3(0, (float)Simulation3DVisualStyle.TriadAxisLengthMm, 0), Simulation3DVisualStyle.AxisYColor));
-        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3(0, 0, (float)Simulation3DVisualStyle.TriadAxisLengthMm), Simulation3DVisualStyle.AxisZColor));
+        var axisLength = (float)Simulation3DVisualStyle.TriadAxisLengthMm;
+        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3(axisLength, 0, 0), Simulation3DVisualStyle.AxisXColor));
+        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3(0, axisLength, 0), Simulation3DVisualStyle.AxisYColor));
+        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3(0, 0, axisLength), Simulation3DVisualStyle.AxisZColor));
         _originToTcpLine = CreateOriginAxisLine(Vector3.Zero, Vector3.Zero, Simulation3DVisualStyle.OriginToTcpLineColor, Simulation3DVisualStyle.OriginToTcpLineThickness);
         SimViewport.Children.Add(_originToTcpLine);
 
@@ -430,10 +431,10 @@ public partial class MainWindow : Window
     }
 
     private static MaterialGroup CreateJointHousingMaterial()
-        => CreateMaterial(Simulation3DVisualStyle.JointHousingColor, Color.FromRgb(230, 232, 238), 120);
+        => CreateMaterial(Simulation3DVisualStyle.JointHousingColor, Simulation3DVisualStyle.JointHousingSpecularColor, 120);
 
     private static MaterialGroup CreateJointCapMaterial()
-        => CreateMaterial(Simulation3DVisualStyle.JointCapColor, Color.FromRgb(210, 255, 255), 140);
+        => CreateMaterial(Simulation3DVisualStyle.JointCapColor, Simulation3DVisualStyle.JointCapSpecularColor, 140);
 
     private static MaterialGroup CreateMaterial(Color diffuse, Color specular, double specularPower)
     {
