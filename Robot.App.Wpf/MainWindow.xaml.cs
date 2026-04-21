@@ -24,6 +24,7 @@ public partial class MainWindow : Window
     private readonly Ur5LikeRobotModel _robotModel = new();
     private readonly ScenePlacementService _scenePlacementService = new();
     private readonly List<LinkVisualBinding> _linkVisuals = new();
+    private readonly List<JointVisualBinding> _jointVisuals = new();
 
     private MotionEngine? _engine;
     private IRobotDevice? _device;
@@ -35,6 +36,7 @@ public partial class MainWindow : Window
     private SceneBox _workpiece;
     private SceneBox _fence;
     private bool _is3DInitialized;
+    private LinesVisual3D? _originToTcpLine;
 
     public MainWindow()
     {
@@ -282,6 +284,12 @@ public partial class MainWindow : Window
             var model = new GeometryModel3D(unitCapsule, CreateLinkMaterial(isCollision: false));
             _sceneGroup.Children.Add(model);
             _linkVisuals.Add(new LinkVisualBinding(linkName, model));
+
+            var housingModel = new GeometryModel3D(unitCapsule, CreateJointHousingMaterial());
+            _sceneGroup.Children.Add(housingModel);
+            var capModel = new GeometryModel3D(unitCapsule, CreateJointCapMaterial());
+            _sceneGroup.Children.Add(capModel);
+            _jointVisuals.Add(new JointVisualBinding(linkName, housingModel, capModel));
         }
 
         _workpieceModel = CreateBoxModel(new Vector3(500, 300, 300), Color.FromRgb(77, 118, 189));
@@ -289,17 +297,23 @@ public partial class MainWindow : Window
         _sceneGroup.Children.Add(_workpieceModel);
         _sceneGroup.Children.Add(_fenceModel);
 
+        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3((float)Simulation3DVisualStyle.TriadAxisLengthMm, 0, 0), Simulation3DVisualStyle.AxisXColor));
+        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3(0, (float)Simulation3DVisualStyle.TriadAxisLengthMm, 0), Simulation3DVisualStyle.AxisYColor));
+        SimViewport.Children.Add(CreateOriginAxisLine(Vector3.Zero, new Vector3(0, 0, (float)Simulation3DVisualStyle.TriadAxisLengthMm), Simulation3DVisualStyle.AxisZColor));
+        _originToTcpLine = CreateOriginAxisLine(Vector3.Zero, Vector3.Zero, Simulation3DVisualStyle.OriginToTcpLineColor, Simulation3DVisualStyle.OriginToTcpLineThickness);
+        SimViewport.Children.Add(_originToTcpLine);
+
         SimViewport.Children.Add(new ModelVisual3D { Content = _sceneGroup });
-        SimViewport.Camera = CreateCamera(new Point3D(1600, -1600, 1300));
+        SimViewport.Camera = CreateCamera(Simulation3DVisualStyle.WorkCameraPosition, Simulation3DVisualStyle.CameraLookAt, Simulation3DVisualStyle.WorkCameraFieldOfViewDeg);
         _is3DInitialized = true;
     }
 
     private static Model3DGroup CreateLightingGroup()
     {
         var lights = new Model3DGroup();
-        lights.Children.Add(new AmbientLight(Color.FromRgb(70, 70, 70)));
-        lights.Children.Add(new DirectionalLight(Color.FromRgb(230, 230, 230), new Vector3D(-0.4, -0.7, -1)));
-        lights.Children.Add(new DirectionalLight(Color.FromRgb(180, 180, 180), new Vector3D(0.3, 0.5, -0.7)));
+        lights.Children.Add(new AmbientLight(Color.FromRgb(52, 58, 72)));
+        lights.Children.Add(new DirectionalLight(Color.FromRgb(242, 246, 255), new Vector3D(-0.35, -0.55, -1)));
+        lights.Children.Add(new DirectionalLight(Color.FromRgb(122, 136, 168), new Vector3D(0.42, 0.58, -0.62)));
         return lights;
     }
 
@@ -307,7 +321,7 @@ public partial class MainWindow : Window
     {
         var model = new GeometryModel3D(
             CreateBoxMesh(3000, 3000, 20),
-            CreateMaterial(Color.FromRgb(40, 40, 44), Color.FromRgb(80, 80, 84), 20));
+            CreateMaterial(Simulation3DVisualStyle.FloorDiffuseColor, Simulation3DVisualStyle.FloorSpecularColor, 35));
         model.Transform = new TranslateTransform3D(0, 0, -10);
         return model;
     }
@@ -411,9 +425,15 @@ public partial class MainWindow : Window
     private static MaterialGroup CreateLinkMaterial(bool isCollision)
     {
         return isCollision
-            ? CreateMaterial(Color.FromRgb(220, 40, 40), Colors.White, 100)
-            : CreateMaterial(Color.FromRgb(180, 184, 190), Color.FromRgb(255, 255, 255), 100);
+            ? CreateMaterial(Simulation3DVisualStyle.LinkCollisionColor, Colors.White, 110)
+            : CreateMaterial(Simulation3DVisualStyle.LinkDiffuseColor, Simulation3DVisualStyle.LinkSpecularColor, 115);
     }
+
+    private static MaterialGroup CreateJointHousingMaterial()
+        => CreateMaterial(Simulation3DVisualStyle.JointHousingColor, Color.FromRgb(230, 232, 238), 120);
+
+    private static MaterialGroup CreateJointCapMaterial()
+        => CreateMaterial(Simulation3DVisualStyle.JointCapColor, Color.FromRgb(210, 255, 255), 140);
 
     private static MaterialGroup CreateMaterial(Color diffuse, Color specular, double specularPower)
     {
@@ -423,6 +443,20 @@ public partial class MainWindow : Window
             {
                 new DiffuseMaterial(new SolidColorBrush(diffuse)),
                 new SpecularMaterial(new SolidColorBrush(specular), specularPower),
+            },
+        };
+    }
+
+    private static LinesVisual3D CreateOriginAxisLine(Vector3 start, Vector3 end, Color color, double? thickness = null)
+    {
+        return new LinesVisual3D
+        {
+            Color = color,
+            Thickness = thickness ?? Simulation3DVisualStyle.TriadAxisThickness,
+            Points = new Point3DCollection
+            {
+                new(start.X, start.Y, start.Z),
+                new(end.X, end.Y, end.Z),
             },
         };
     }
@@ -517,6 +551,22 @@ public partial class MainWindow : Window
             model.Material = CreateLinkMaterial(collidingSet.Contains(name));
         }
 
+        foreach (var (name, housingModel, capModel) in _jointVisuals)
+        {
+            var link = robotState.Links.First(x => x.Name.Equals(name, StringComparison.Ordinal));
+            housingModel.Transform = CreateJointHousingTransform(link);
+            capModel.Transform = CreateJointCapTransform(link);
+        }
+
+        if (_originToTcpLine is not null)
+        {
+            _originToTcpLine.Points = new Point3DCollection
+            {
+                new Point3D(0, 0, 0),
+                new Point3D(robotState.TcpPosition.X, robotState.TcpPosition.Y, robotState.TcpPosition.Z),
+            };
+        }
+
         if (collidingLinks.Count > 0)
         {
             CollisionTextBlock.Text = $"Collision: {string.Join(", ", collidingLinks)}";
@@ -543,6 +593,43 @@ public partial class MainWindow : Window
         };
     }
 
+    private static Transform3D CreateJointHousingTransform(RobotLinkTransform link)
+    {
+        var rotation = new System.Windows.Media.Media3D.Quaternion(link.Rotation.X, link.Rotation.Y, link.Rotation.Z, link.Rotation.W);
+        var housingLength = Math.Max(1.0, link.RadiusMm * Simulation3DVisualStyle.JointHousingLengthScale);
+        return new Transform3DGroup
+        {
+            Children =
+            {
+                new ScaleTransform3D(link.RadiusMm * Simulation3DVisualStyle.JointHousingRadiusScale, link.RadiusMm * Simulation3DVisualStyle.JointHousingRadiusScale, housingLength),
+                new RotateTransform3D(new QuaternionRotation3D(rotation)),
+                new TranslateTransform3D(link.Start.X, link.Start.Y, link.Start.Z),
+            },
+        };
+    }
+
+    private static Transform3D CreateJointCapTransform(RobotLinkTransform link)
+    {
+        var rotation = new System.Windows.Media.Media3D.Quaternion(link.Rotation.X, link.Rotation.Y, link.Rotation.Z, link.Rotation.W);
+        var axis = link.End - link.Start;
+        if (axis.LengthSquared() < 1e-6f)
+        {
+            axis = Vector3.UnitZ;
+        }
+
+        axis = Vector3.Normalize(axis);
+        var capCenter = link.Start + (axis * (float)(Simulation3DVisualStyle.JointCapThicknessMm * 0.5));
+        return new Transform3DGroup
+        {
+            Children =
+            {
+                new ScaleTransform3D(link.RadiusMm * Simulation3DVisualStyle.JointCapRadiusScale, link.RadiusMm * Simulation3DVisualStyle.JointCapRadiusScale, Simulation3DVisualStyle.JointCapThicknessMm),
+                new RotateTransform3D(new QuaternionRotation3D(rotation)),
+                new TranslateTransform3D(capCenter.X, capCenter.Y, capCenter.Z),
+            },
+        };
+    }
+
     private void FrontCameraButton_OnClick(object sender, RoutedEventArgs e) => ApplyCameraPreset(CameraPreset.Front);
 
     private void SideCameraButton_OnClick(object sender, RoutedEventArgs e) => ApplyCameraPreset(CameraPreset.Side);
@@ -557,21 +644,20 @@ public partial class MainWindow : Window
 
     private void ApplyCameraPreset(CameraPreset preset)
     {
-        var position = preset switch
+        var (position, lookAt, fov) = preset switch
         {
-            CameraPreset.Front => new Point3D(2300, 0, 1100),
-            CameraPreset.Side => new Point3D(0, 2300, 1100),
-            _ => new Point3D(1650, -1650, 1400),
+            CameraPreset.Front => (new Point3D(2300, 0, 1100), new Point3D(0, 0, 600), 45d),
+            CameraPreset.Side => (new Point3D(0, 2300, 1100), new Point3D(0, 0, 600), 45d),
+            _ => (Simulation3DVisualStyle.WorkCameraPosition, Simulation3DVisualStyle.CameraLookAt, Simulation3DVisualStyle.WorkCameraFieldOfViewDeg),
         };
 
-        SimViewport.Camera = CreateCamera(position);
+        SimViewport.Camera = CreateCamera(position, lookAt, fov);
     }
 
-    private static PerspectiveCamera CreateCamera(Point3D position)
+    private static PerspectiveCamera CreateCamera(Point3D position, Point3D lookAt, double fieldOfView)
     {
-        var lookAt = new Point3D(0, 0, 600);
         var direction = lookAt - position;
-        return new PerspectiveCamera(position, direction, new Vector3D(0, 0, 1), 45);
+        return new PerspectiveCamera(position, direction, new Vector3D(0, 0, 1), fieldOfView);
     }
 
     private void CapturePresetScreenshot(CameraPreset preset)
@@ -609,5 +695,6 @@ public partial class MainWindow : Window
     }
 
     private readonly record struct LinkVisualBinding(string Name, GeometryModel3D Model);
+    private readonly record struct JointVisualBinding(string Name, GeometryModel3D HousingModel, GeometryModel3D CapModel);
     private readonly record struct TrailPoint(DateTime Timestamp, Pose6 Pose);
 }

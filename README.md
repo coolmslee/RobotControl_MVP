@@ -6,7 +6,13 @@
 
 ### Features
 - UR5-like 6-axis robot link visualization (parametric primitives)
+- UR-inspired visual refresh:
+  - deep blue gradient viewport background
+  - light-gray metallic links + darker joint housings
+  - cyan accent caps on joint faces
 - 6 joint sliders (`q1..q6`, degrees) for immediate articulation
+- origin XYZ triad gizmo at world origin
+- live thin white line from world origin to TCP
 - Workpiece box: `500 x 300 x 300 mm`
 - Workpiece random placement:
   - `X: [300, 900] mm`
